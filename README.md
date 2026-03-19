@@ -15,15 +15,15 @@ Vide tutoriais do PI.
 ## Aether AI
 
 
-## Integrantes: Goku Sayajin</a>, <a href="https://www.linkedin.com/in/victorbarq/">Saitama One</a>, <a href="https://www.linkedin.com/in/victorbarq/">Ikki de Fenix</a>, <a href="https://www.linkedin.com/in/victorbarq/">Yusuke Urameshi</a>, <a href="https://www.linkedin.com/in/victorbarq/">Roronoa Zoro</a>
+## Integrantes: Bruno Da Silva Ribeiro 24025958, Kauan Rocha Dias 24026492 , Gabriel Henrique Coelho Marussi 24026609, Arthur Rodrigues Ferreira 24026567
 
-## Professores Orientadores: <a href="https://www.linkedin.com/in/victorbarq/">Dr. Victor Von Doom</a>, <a href="https://www.linkedin.com/in/victorbarq/">Me. Saitama</a>, <a href="https://www.linkedin.com/in/victorbarq/">Dr. Strange</a>, <a href="https://www.linkedin.com/in/victorbarq/">Me. Yoda</a>, <a href="https://www.linkedin.com/in/victorbarq/">Dr. Gero</a>
+## Professores Orientadores: Rafael Diogo Rossetti, Rodnil da Silva Moreira Lisboa, Rodrigo da Rosa, Victor Bruno Alexander Rosetti de Queiroz, Marcos Minoru Nakatsugawa
 
 ## Descrição
 
 
 
-De um a dois parágrafos sobre o que é seu projeto e o que ele faz.
+Um aplicativo que utiliza pensamento computacional para realizar a contagem de doações é uma ferramenta desenvolvida para organizar, processar e analisar dados de forma lógica e eficiente. Por meio da decomposição do problema, o sistema divide as doações em categorias (como tipo, quantidade ou peso), permitindo um controle mais claro e estruturado. Além disso, utiliza padrões e algoritmos para automatizar a contagem, reduzindo erros humanos e garantindo maior precisão nas informações
 <br><br>
 Meu projeto ajuda estudantes FECAP a configurarem seus githubs.
 <br><br>
