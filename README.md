@@ -25,10 +25,9 @@ Vide tutoriais do PI.
 
 Um aplicativo que utiliza pensamento computacional para realizar a contagem de doações é uma ferramenta desenvolvida para organizar, processar e analisar dados de forma lógica e eficiente. Por meio da decomposição do problema, o sistema divide as doações em categorias (como tipo, quantidade ou peso), permitindo um controle mais claro e estruturado. Além disso, utiliza padrões e algoritmos para automatizar a contagem, reduzindo erros humanos e garantindo maior precisão nas informações
 <br><br>
-Meu projeto ajuda estudantes FECAP a configurarem seus githubs.
-<br><br>
-May the force be with you!
-<br><br>
+Esse tipo de aplicação também pode aplicar abstração ao focar apenas nos dados relevantes para a contagem, ignorando informações desnecessárias, o que otimiza o desempenho. Com isso, torna-se possível gerar relatórios, acompanhar o progresso das doações em tempo real e auxiliar na tomada de decisões, sendo especialmente útil para organizações, campanhas solidárias e projetos sociais que precisam de organização e transparência.
+
+
 
 ## 🛠 Estrutura de pastas
 
