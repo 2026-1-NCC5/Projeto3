@@ -1,0 +1,15 @@
+# Detector de Alimentos - Dependências
+# Instalação: pip install -r requirements.txt
+
+# Core - Detecção
+ultralytics>=8.3.0
+lap>=0.5.12
+opencv-python>=4.10.0
+pillow>=10.0.0
+
+# Webscraping (opcional)
+requests>=2.31.0
+duckduckgo-search>=6.2.0
+
+# Desenvolvimento (opcional)
+pytest>=7.0.0
