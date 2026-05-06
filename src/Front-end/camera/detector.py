@@ -8,6 +8,14 @@ from ultralytics import YOLO
 # Adiciona o diretório raiz ao path para importar common
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# Adiciona o diretorio Back-end ao path para importar o banco de dados
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "Back-end"))
+try:
+    from database import add_food_item
+except ImportError as e:
+    print(f"Aviso: Não foi possível importar o banco de dados: {e}")
+    def add_food_item(name, track_id, confidence=None, user_id=None): pass
+
 from common.constants import (
     CLASS_COLORS,
     DEFAULT_CAMERA_BUFFER_SIZE,
@@ -69,7 +77,7 @@ class FoodDetector:
 
         cv2.putText(
             frame,
-            f"Total no frame: {sum(counts.values())}",
+            f"Total detectado: {sum(counts.values())}",
             (panel_x + 14, panel_y + panel_h - 14),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.58,
@@ -163,12 +171,15 @@ class FoodDetector:
             return voted[0]
         return None
 
-    def predict_image(self, image_path: str) -> Counter:
+    def predict_image(self, image_path: str, show: bool = True, save_path: str = None, user_id: int = None) -> Counter:
         """
         Executa detecção em uma imagem estática e exibe o resultado.
         
         Args:
             image_path: Caminho para o arquivo de imagem
+            show: Se True, abre a janela do OpenCV para exibir a imagem
+            save_path: Se fornecido, salva a imagem anotada no caminho especificado
+            user_id: ID do usuário para associar a detecção
             
         Returns:
             Counter: Contagem de objetos detectados por classe
@@ -176,18 +187,35 @@ class FoodDetector:
         result = self.model.predict(source=image_path, conf=self.conf, verbose=False)[0]
         counts = self._count(result)
         frame = self._draw_counts(result.plot(), counts)
+        
+        # Salva cada item detectado no banco de dados para o dashboard
+        if result.boxes is not None:
+            for box in result.boxes:
+                class_id = int(box.cls[0])
+                label = self._label(class_id)
+                conf = float(box.conf[0].item())
+                # Como não temos um track_id real para imagens estáticas, usamos 0 ou None
+                add_food_item(label, None, conf, user_id)
+
         print(dict(counts))
-        cv2.imshow("Deteccao", frame)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        
+        if save_path:
+            cv2.imwrite(save_path, frame)
+            
+        if show:
+            cv2.imshow("Deteccao", frame)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+            
         return counts
 
-    def capture_and_predict_photo(self, camera_id: int = 0) -> Counter | None:
+    def capture_and_predict_photo(self, camera_id: int = 0, show: bool = True, save_path: str = None, user_id: int = None) -> Counter | None:
         """
         Captura uma foto da webcam e executa detecção.
         
         Args:
             camera_id: ID da câmera (0, 1, 2...)
+            user_id: ID do usuário para associar a detecção
             
         Returns:
             Counter | None: Contagem de objetos detectados ou None se falhar
@@ -208,7 +236,107 @@ class FoodDetector:
         cv2.imwrite(str(photo_path), frame)
         print(f"Foto capturada em: {photo_path}")
 
-        return self.predict_image(str(photo_path))
+        return self.predict_image(str(photo_path), show=show, save_path=save_path, user_id=user_id)
+
+    def generate_webcam_frames(
+        self,
+        camera_id: int = 0,
+        mode: str = "conveyor",
+        line_y_ratio: float = 0.6,
+        min_label_votes: int = 3,
+        user_id: int = None,
+    ):
+        """
+        Gera frames da webcam em formato JPEG para web streaming.
+        """
+        cap = cv2.VideoCapture(camera_id)
+        if not cap.isOpened():
+            print(f"Nao foi possivel abrir camera {camera_id}")
+            return
+
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, DEFAULT_CAMERA_BUFFER_SIZE)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, DEFAULT_CAMERA_WIDTH)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, DEFAULT_CAMERA_HEIGHT)
+
+        totals = Counter()
+        track_labels = defaultdict(lambda: deque(maxlen=10))
+        track_last_y = {}
+        counted_ids = set()
+
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                continue
+
+            if mode in ["conveyor", "live"]:
+                result = self.model.track(
+                    source=frame,
+                    conf=self.conf,
+                    persist=True,
+                    verbose=False,
+                    tracker="bytetrack.yaml",
+                )[0]
+            else:
+                result = self.model.predict(source=frame, conf=self.conf, verbose=False)[0]
+
+            counts = self._count(result)
+            shown = result.plot()
+
+            if mode == "conveyor":
+                h = shown.shape[0]
+                line_y = int(h * line_y_ratio)
+
+                if result.boxes is not None and result.boxes.id is not None:
+                    for box, track_id_tensor in zip(result.boxes, result.boxes.id):
+                        track_id = int(track_id_tensor.item())
+                        class_id = int(box.cls[0])
+                        label = self._label(class_id)
+                        conf = float(box.conf[0].item())
+                        x1, y1, x2, y2 = box.xyxy[0].tolist()
+                        cy = int((y1 + y2) / 2)
+
+                        track_labels[track_id].append(label)
+                        stable = self._stable_label(track_labels[track_id], min_label_votes)
+                        prev_y = track_last_y.get(track_id)
+                        track_last_y[track_id] = cy
+
+                        if (
+                            stable is not None
+                            and prev_y is not None
+                            and track_id not in counted_ids
+                            and prev_y < line_y <= cy
+                        ):
+                            totals[stable] += 1
+                            counted_ids.add(track_id)
+                            add_food_item(stable, track_id, conf, user_id)
+
+                shown = self._draw_conveyor_overlay(shown, totals, line_y)
+            elif mode == "live":
+                if result.boxes is not None and result.boxes.id is not None:
+                    for box, track_id_tensor in zip(result.boxes, result.boxes.id):
+                        track_id = int(track_id_tensor.item())
+                        class_id = int(box.cls[0])
+                        label = self._label(class_id)
+                        conf = float(box.conf[0].item())
+
+                        track_labels[track_id].append(label)
+                        stable = self._stable_label(track_labels[track_id], min_label_votes)
+
+                        if stable is not None and track_id not in counted_ids:
+                            totals[stable] += 1
+                            counted_ids.add(track_id)
+                            add_food_item(stable, track_id, conf, user_id)
+
+                shown = self._draw_counts(shown, totals)
+            else:
+                shown = self._draw_counts(shown, counts)
+
+            ret, buffer = cv2.imencode('.jpg', shown)
+            frame_bytes = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+
+        cap.release()
 
     def predict_webcam(
         self,
@@ -248,7 +376,7 @@ class FoodDetector:
             if not ok:
                 continue
 
-            if mode == "conveyor":
+            if mode in ["conveyor", "live"]:
                 result = self.model.track(
                     source=frame,
                     conf=self.conf,
@@ -288,8 +416,25 @@ class FoodDetector:
                         ):
                             totals[stable] += 1
                             counted_ids.add(track_id)
+                            add_food_item(stable, track_id)
 
                 shown = self._draw_conveyor_overlay(shown, totals, line_y)
+            elif mode == "live":
+                if result.boxes is not None and result.boxes.id is not None:
+                    for box, track_id_tensor in zip(result.boxes, result.boxes.id):
+                        track_id = int(track_id_tensor.item())
+                        class_id = int(box.cls[0])
+                        label = self._label(class_id)
+
+                        track_labels[track_id].append(label)
+                        stable = self._stable_label(track_labels[track_id], min_label_votes)
+
+                        if stable is not None and track_id not in counted_ids:
+                            totals[stable] += 1
+                            counted_ids.add(track_id)
+                            add_food_item(stable, track_id)
+
+                shown = self._draw_counts(shown, totals)
             else:
                 shown = self._draw_counts(shown, counts)
 
