@@ -2,19 +2,20 @@
 
 # Mapeamento de nomes de classes para nomes de exibição
 DISPLAY_NAMES = {
-    "beans package": "Feijao",
-    "pasta package": "Macarrao",
-    "rice package": "Arroz",
-    "beans_package": "Feijao",
-    "pasta_package": "Macarrao",
-    "rice_package": "Arroz",
+    "oleo": "oleo",
+    "fuba": "fuba",
+    "oil": "oleo",
+    "cornmeal": "fuba",
+    "oil package": "oleo",
+    "cornmeal package": "fuba",
+    "oil_package": "oleo",
+    "cornmeal_package": "fuba",
 }
 
 # Cores para cada classe (BGR format for OpenCV)
 CLASS_COLORS = {
-    "Feijao": (80, 180, 255),
-    "Macarrao": (110, 245, 140),
-    "Arroz": (255, 215, 120),
+    "oleo": (0, 215, 255),    # Amarelo/Dourado
+    "fuba": (0, 140, 255),    # Alaranjado
 }
 
 # Configurações padrão de câmera

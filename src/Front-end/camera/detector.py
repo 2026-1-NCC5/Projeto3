@@ -55,36 +55,7 @@ class FoodDetector:
         return counts
 
     def _draw_counts(self, frame, counts: Counter):
-        panel_x, panel_y = 18, 16
-        panel_w, panel_h = 330, 180
-        self._draw_panel(frame, panel_x, panel_y, panel_w, panel_h)
-
-        cv2.putText(
-            frame,
-            "Contagem em tempo real",
-            (panel_x + 14, panel_y + 34),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.75,
-            (255, 255, 255),
-            2,
-            cv2.LINE_AA,
-        )
-
-        y = panel_y + 70
-        for name in ["Feijao", "Macarrao", "Arroz"]:
-            self._draw_counter_row(frame, panel_x + 14, y, name, counts.get(name, 0))
-            y += 34
-
-        cv2.putText(
-            frame,
-            f"Total detectado: {sum(counts.values())}",
-            (panel_x + 14, panel_y + panel_h - 14),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.58,
-            (220, 220, 220),
-            1,
-            cv2.LINE_AA,
-        )
+        """Removido para manter a interface limpa (estatísticas agora no Dashboard)."""
         return frame
 
     def _draw_panel(self, frame, x: int, y: int, w: int, h: int) -> None:
@@ -118,6 +89,7 @@ class FoodDetector:
         )
 
     def _draw_conveyor_overlay(self, frame, totals: Counter, line_y: int):
+        """Mantém apenas a linha de contagem, removendo o painel de estatísticas."""
         h, w = frame.shape[:2]
         cv2.line(frame, (0, line_y), (w, line_y), (0, 230, 255), 2)
         cv2.putText(
@@ -128,37 +100,6 @@ class FoodDetector:
             0.6,
             (0, 230, 255),
             2,
-            cv2.LINE_AA,
-        )
-
-        panel_x, panel_y = 18, 16
-        panel_w, panel_h = 360, 195
-        self._draw_panel(frame, panel_x, panel_y, panel_w, panel_h)
-
-        cv2.putText(
-            frame,
-            "Contagem acumulada (esteira)",
-            (panel_x + 14, panel_y + 34),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.72,
-            (255, 255, 255),
-            2,
-            cv2.LINE_AA,
-        )
-
-        y = panel_y + 72
-        for name in ["Feijao", "Macarrao", "Arroz"]:
-            self._draw_counter_row(frame, panel_x + 14, y, name, totals.get(name, 0))
-            y += 34
-
-        cv2.putText(
-            frame,
-            f"Qtd total: {sum(totals.values())}",
-            (panel_x + 14, panel_y + panel_h - 14),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.66,
-            (220, 220, 220),
-            1,
             cv2.LINE_AA,
         )
         return frame
