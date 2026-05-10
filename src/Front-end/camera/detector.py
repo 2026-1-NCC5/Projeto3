@@ -1,4 +1,7 @@
 import sys
+import threading
+import time
+import numpy as np
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
@@ -11,35 +14,69 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # Adiciona o diretorio Back-end ao path para importar o banco de dados
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "Back-end"))
 try:
-    from database import add_food_item
+    from database import add_food_item, add_pending_camera_item
 except ImportError as e:
     print(f"Aviso: Não foi possível importar o banco de dados: {e}")
     def add_food_item(name, track_id, confidence=None, user_id=None): pass
+    def add_pending_camera_item(session_key, user_id, name, quantity=1, weight_kg=0.0, confidence=None): pass
 
 from common.constants import (
     CLASS_COLORS,
     DEFAULT_CAMERA_BUFFER_SIZE,
     DEFAULT_CAMERA_HEIGHT,
     DEFAULT_CAMERA_WIDTH,
+    ESTIMATED_ITEM_WEIGHT_KG,
     DISPLAY_NAMES,
+    RICE_WEIGHT_THRESHOLDS,
 )
 
 
+_ACTIVE_STREAMS = {}
+_ACTIVE_STREAMS_LOCK = threading.Lock()
+
+
+def set_camera_stream_active(user_id, active: bool) -> None:
+    if user_id is None:
+        return
+    with _ACTIVE_STREAMS_LOCK:
+        if active:
+            _ACTIVE_STREAMS[user_id] = True
+        else:
+            _ACTIVE_STREAMS.pop(user_id, None)
+
+
+def is_camera_stream_active(user_id) -> bool:
+    if user_id is None:
+        return True
+    with _ACTIVE_STREAMS_LOCK:
+        return _ACTIVE_STREAMS.get(user_id, False)
+
+
+def try_open_camera(camera_id, retries=5, skip_frames=5):
+    cap = None
+    for i in range(retries):
+        # Tenta AVFoundation no Mac, depois fallback padrão
+        for cid in [camera_id, 0, 1]:
+            try:
+                cap = cv2.VideoCapture(cid, cv2.CAP_AVFOUNDATION)
+                if not cap.isOpened():
+                    cap = cv2.VideoCapture(cid)
+                if cap.isOpened():
+                    for _ in range(skip_frames):
+                        cap.read()
+                    return cap
+                if cap: cap.release()
+            except:
+                if cap: cap.release()
+        time.sleep(0.5)
+    return None
+
+
 class FoodDetector:
-    """
-    Detector de alimentos usando YOLO para identificação em tempo real.
-    
-    Suporta detecção em imagens estáticas e streaming de vídeo com dois modos:
-    - 'live': Detecção frame a frame sem contagem acumulada
-    - 'conveyor': Modo esteira com tracking e contagem de objetos cruzando uma linha
-    
-    Args:
-        model_path: Caminho para o arquivo .pt do modelo YOLO treinado
-        conf: Threshold de confiança mínimo para detecções (0.0 a 1.0)
-    """
     def __init__(self, model_path: str, conf: float = 0.7):
         self.model = YOLO(model_path)
         self.conf = conf
+        self._infer_lock = threading.Lock()
 
     def _label(self, class_id: int) -> str:
         raw = self.model.names.get(class_id, str(class_id))
@@ -55,359 +92,191 @@ class FoodDetector:
         return counts
 
     def _draw_counts(self, frame, counts: Counter):
-        """Removido para manter a interface limpa (estatísticas agora no Dashboard)."""
-        return frame
-
-    def _draw_panel(self, frame, x: int, y: int, w: int, h: int) -> None:
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (x, y), (x + w, y + h), (18, 24, 32), -1)
-        cv2.addWeighted(overlay, 0.62, frame, 0.38, 0, frame)
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (120, 150, 180), 1)
-
-    def _draw_counter_row(self, frame, x: int, y: int, label: str, value: int) -> None:
-        color = CLASS_COLORS.get(label, (200, 200, 200))
-        cv2.circle(frame, (x + 7, y - 4), 7, color, -1)
-        cv2.putText(
-            frame,
-            label,
-            (x + 22, y),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.68,
-            (240, 240, 240),
-            2,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            frame,
-            str(value),
-            (x + 200, y),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.75,
-            color,
-            2,
-            cv2.LINE_AA,
-        )
-
-    def _draw_conveyor_overlay(self, frame, totals: Counter, line_y: int):
-        """Mantém apenas a linha de contagem, removendo o painel de estatísticas."""
-        h, w = frame.shape[:2]
-        cv2.line(frame, (0, line_y), (w, line_y), (0, 230, 255), 2)
-        cv2.putText(
-            frame,
-            "Linha de contagem",
-            (20, max(20, line_y - 10)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 230, 255),
-            2,
-            cv2.LINE_AA,
-        )
-        return frame
+        return frame # Dashboard lida com visualização
 
     def _stable_label(self, labels: deque, min_votes: int) -> str | None:
-        if not labels:
-            return None
+        if not labels: return None
         voted = Counter(labels).most_common(1)[0]
-        if voted[1] >= min_votes:
-            return voted[0]
-        return None
+        return voted[0] if voted[1] >= min_votes else None
 
     def predict_image(self, image_path: str, show: bool = True, save_path: str = None, user_id: int = None) -> Counter:
-        """
-        Executa detecção em uma imagem estática e exibe o resultado.
-        
-        Args:
-            image_path: Caminho para o arquivo de imagem
-            show: Se True, abre a janela do OpenCV para exibir a imagem
-            save_path: Se fornecido, salva a imagem anotada no caminho especificado
-            user_id: ID do usuário para associar a detecção
-            
-        Returns:
-            Counter: Contagem de objetos detectados por classe
-        """
         result = self.model.predict(source=image_path, conf=self.conf, verbose=False)[0]
         counts = self._count(result)
-        frame = self._draw_counts(result.plot(), counts)
-        
-        # Salva cada item detectado no banco de dados para o dashboard
+        frame = result.plot()
         if result.boxes is not None:
             for box in result.boxes:
                 class_id = int(box.cls[0])
                 label = self._label(class_id)
                 conf = float(box.conf[0].item())
-                # Como não temos um track_id real para imagens estáticas, usamos 0 ou None
                 add_food_item(label, None, conf, user_id)
-
-        print(dict(counts))
-        
-        if save_path:
-            cv2.imwrite(save_path, frame)
-            
-        if show:
-            cv2.imshow("Deteccao", frame)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
-            
+        if save_path: cv2.imwrite(save_path, frame)
         return counts
 
     def capture_and_predict_photo(self, camera_id: int = 0, show: bool = True, save_path: str = None, user_id: int = None) -> Counter | None:
-        """
-        Captura uma foto da webcam e executa detecção.
-        
-        Args:
-            camera_id: ID da câmera (0, 1, 2...)
-            user_id: ID do usuário para associar a detecção
-            
-        Returns:
-            Counter | None: Contagem de objetos detectados ou None se falhar
-        """
-        cap = cv2.VideoCapture(camera_id)
-        if not cap.isOpened():
-            raise RuntimeError(f"Nao foi possivel abrir camera {camera_id}")
-
+        cap = try_open_camera(camera_id, retries=5, skip_frames=2)
+        if not cap: return None
         ok, frame = cap.read()
         cap.release()
-        if not ok:
-            print("Nao foi possivel capturar foto da webcam.")
-            return None
-
+        if not ok: return None
+        
         photo_dir = Path(__file__).resolve().parent / "captures"
         photo_dir.mkdir(parents=True, exist_ok=True)
-        photo_path = photo_dir / "captura_teste.jpg"
+        photo_path = photo_dir / f"cap_{int(time.time())}.jpg"
         cv2.imwrite(str(photo_path), frame)
-        print(f"Foto capturada em: {photo_path}")
-
         return self.predict_image(str(photo_path), show=show, save_path=save_path, user_id=user_id)
 
-    def generate_webcam_frames(
-        self,
-        camera_id: int = 0,
-        mode: str = "conveyor",
-        line_y_ratio: float = 0.6,
-        min_label_votes: int = 3,
-        user_id: int = None,
-    ):
-        """
-        Gera frames da webcam em formato JPEG para web streaming.
-        """
-        cap = cv2.VideoCapture(camera_id)
-        if not cap.isOpened():
-            print(f"Nao foi possivel abrir camera {camera_id}")
+    def generate_webcam_frames(self, camera_id=0, mode="conveyor", roi_size=80, primary_color="#1A4D2E", line_y_ratio=0.6, min_label_votes=3, user_id=None, session_key=None):
+        cap = try_open_camera(camera_id, retries=5, skip_frames=5)
+        if not cap:
+            err = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(err, "ERRO: CAMERA NAO ENCONTRADA", (100, 240), 1, 1.5, (0,0,255), 2)
+            ret, buf = cv2.imencode('.jpg', err)
+            yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
             return
 
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, DEFAULT_CAMERA_BUFFER_SIZE)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, DEFAULT_CAMERA_WIDTH)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, DEFAULT_CAMERA_HEIGHT)
+        try:
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
-        totals = Counter()
-        track_labels = defaultdict(lambda: deque(maxlen=10))
-        track_last_y = {}
-        counted_ids = set()
+            totals = Counter()
+            track_labels = defaultdict(lambda: deque(maxlen=10))
+            track_last_y = {}
+            counted_ids = set()
+            last_frame_time = 0
 
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                continue
+            while is_camera_stream_active(user_id):
+                if time.time() - last_frame_time < 0.04:
+                    time.sleep(0.01)
+                    continue
+                
+                ok, frame = cap.read()
+                if not ok:
+                    time.sleep(0.1)
+                    continue
+                
+                last_frame_time = time.time()
+                h, w = frame.shape[:2]
+                roi_px = int(min(w, h) * (roi_size / 100))
+                rx1, ry1 = (w - roi_px) // 2, (h - roi_px) // 2
+                rx2, ry2 = rx1 + roi_px, ry1 + roi_px
+                line_y = ry1 + int((ry2 - ry1) * line_y_ratio)
 
-            if mode in ["conveyor", "live"]:
-                result = self.model.track(
-                    source=frame,
-                    conf=self.conf,
-                    persist=True,
-                    verbose=False,
-                    tracker="bytetrack.yaml",
-                )[0]
-            else:
-                result = self.model.predict(source=frame, conf=self.conf, verbose=False)[0]
+                try:
+                    p_bgr = tuple(int(primary_color.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))[::-1]
+                except Exception:
+                    p_bgr = (0, 255, 0)
 
-            counts = self._count(result)
-            shown = result.plot()
+                if mode == "snapshot":
+                    # Desenha a ROI no frame de preview para o usuário se posicionar
+                    cv2.rectangle(frame, (rx1, ry1), (rx2, ry2), (0, 0, 0), 3)
+                    cv2.rectangle(frame, (rx1, ry1), (rx2, ry2), p_bgr, 2)
+                    cv2.putText(frame, "POSICIONE O ALIMENTO AQUI", (rx1, ry1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, p_bgr, 2)
+                    
+                    ret, buf = cv2.imencode('.jpg', frame)
+                    yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
+                    continue
 
-            if mode == "conveyor":
-                h = shown.shape[0]
-                line_y = int(h * line_y_ratio)
+                try:
+                    with self._infer_lock:
+                        result = self.model.track(frame, conf=self.conf, persist=True, verbose=False)[0]
+                        shown = result.plot()
 
-                if result.boxes is not None and result.boxes.id is not None:
-                    for box, track_id_tensor in zip(result.boxes, result.boxes.id):
-                        track_id = int(track_id_tensor.item())
-                        class_id = int(box.cls[0])
-                        label = self._label(class_id)
-                        conf = float(box.conf[0].item())
-                        x1, y1, x2, y2 = box.xyxy[0].tolist()
-                        cy = int((y1 + y2) / 2)
+                    # --- DESENHO DA ZONA DE CALIBRAÇÃO (ROI) ---
+                    # Desenha o Quadrado da ROI
+                    cv2.rectangle(shown, (rx1, ry1), (rx2, ry2), (0, 0, 0), 3) # Borda preta externa
+                    cv2.rectangle(shown, (rx1, ry1), (rx2, ry2), p_bgr, 2) # Linha da cor principal
+                    
+                    # Desenha Cantos Reforçados (Glow effect)
+                    cl = 40 # Comprimento do canto
+                    for offset, thickness, color in [(0, 5, (0,0,0)), (0, 2, p_bgr)]:
+                        # Top Left
+                        cv2.line(shown, (rx1, ry1), (rx1 + cl, ry1), color, thickness)
+                        cv2.line(shown, (rx1, ry1), (rx1, ry1 + cl), color, thickness)
+                        # Top Right
+                        cv2.line(shown, (rx2, ry1), (rx2 - cl, ry1), color, thickness)
+                        cv2.line(shown, (rx2, ry1), (rx2, ry1 + cl), color, thickness)
+                        # Bottom Left
+                        cv2.line(shown, (rx1, ry2), (rx1 + cl, ry2), color, thickness)
+                        cv2.line(shown, (rx1, ry2), (rx1, ry2 - cl), color, thickness)
+                        # Bottom Right
+                        cv2.line(shown, (rx2, ry2), (rx2 - cl, ry2), color, thickness)
+                        cv2.line(shown, (rx2, ry2), (rx2, ry2 - cl), color, thickness)
 
-                        track_labels[track_id].append(label)
-                        stable = self._stable_label(track_labels[track_id], min_label_votes)
-                        prev_y = track_last_y.get(track_id)
-                        track_last_y[track_id] = cy
+                    # Desenha a Linha de Sensor (apenas no modo conveyor)
+                    if mode == "conveyor":
+                        cv2.line(shown, (rx1, line_y), (rx2, line_y), (0, 0, 0), 4)
+                        cv2.line(shown, (rx1, line_y), (rx2, line_y), p_bgr, 2)
+                        cv2.putText(shown, "SENSOR", (rx1 + 5, line_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, p_bgr, 2)
 
-                        if (
-                            stable is not None
-                            and prev_y is not None
-                            and track_id not in counted_ids
-                            and prev_y < line_y <= cy
-                        ):
-                            totals[stable] += 1
-                            counted_ids.add(track_id)
-                            add_food_item(stable, track_id, conf, user_id)
+                    if result.boxes is not None and result.boxes.id is not None:
+                        for box, tid_tensor in zip(result.boxes, result.boxes.id):
+                            tid = int(tid_tensor.item())
+                            label = self._label(int(box.cls[0]))
+                            conf = float(box.conf[0].item())
+                            x1, y1, x2, y2 = box.xyxy[0].tolist()
+                            cx, cy = (x1+x2)/2, (y1+y2)/2
 
-                shown = self._draw_conveyor_overlay(shown, totals, line_y)
-            elif mode == "live":
-                if result.boxes is not None and result.boxes.id is not None:
-                    for box, track_id_tensor in zip(result.boxes, result.boxes.id):
-                        track_id = int(track_id_tensor.item())
-                        class_id = int(box.cls[0])
-                        label = self._label(class_id)
-                        conf = float(box.conf[0].item())
+                            if rx1 <= cx <= rx2 and ry1 <= cy <= ry2:
+                                track_labels[tid].append(label)
+                                stable = self._stable_label(track_labels[tid], min_label_votes)
+                                prev_y = track_last_y.get(tid)
+                                track_last_y[tid] = cy
 
-                        track_labels[track_id].append(label)
-                        stable = self._stable_label(track_labels[track_id], min_label_votes)
+                                if mode == "conveyor":
+                                    if prev_y is not None and prev_y < line_y <= cy and tid not in counted_ids:
+                                        # Cálculo de ratio (área do box vs área da ROI)
+                                        ratio = ((x2-x1)*(y2-y1)) / (roi_px * roi_px)
+                                        
+                                        # Lógica específica para Arroz (1kg vs 5kg)
+                                        if (stable or label) == "arroz":
+                                            weight = 1.0
+                                            for w_val, threshold in sorted(RICE_WEIGHT_THRESHOLDS.items(), reverse=True):
+                                                if ratio >= threshold:
+                                                    weight = w_val
+                                                    break
+                                        else:
+                                            # Peso padrão para outros itens definido em constants.py
+                                            weight = ESTIMATED_ITEM_WEIGHT_KG.get(stable or label, 1.0)
+                                            
+                                        totals[stable or label] += 1
+                                        counted_ids.add(tid)
+                                        if session_key: add_pending_camera_item(session_key, user_id, stable or label, 1, weight, conf)
+                                else: # mode == live
+                                    if tid not in counted_ids:
+                                        ratio = ((x2-x1)*(y2-y1)) / (roi_px * roi_px)
+                                        if (stable or label) == "arroz":
+                                            weight = 1.0
+                                            for w_val, threshold in sorted(RICE_WEIGHT_THRESHOLDS.items(), reverse=True):
+                                                if ratio >= threshold:
+                                                    weight = w_val
+                                                    break
+                                        else:
+                                            weight = ESTIMATED_ITEM_WEIGHT_KG.get(stable or label, 1.0)
+                                            
+                                        totals[stable or label] += 1
+                                        counted_ids.add(tid)
+                                        if session_key: add_pending_camera_item(session_key, user_id, stable or label, 1, weight, conf)
+                except Exception as e:
+                    print(f"IA Error: {e}")
+                    shown = frame
 
-                        if stable is not None and track_id not in counted_ids:
-                            totals[stable] += 1
-                            counted_ids.add(track_id)
-                            add_food_item(stable, track_id, conf, user_id)
+                cv2.putText(shown, f"SCANNER ATIVO: {roi_size}%", (rx1 + 10, ry1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                ret, buf = cv2.imencode('.jpg', shown)
+                yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
+        finally:
+            if cap: cap.release()
 
-                shown = self._draw_counts(shown, totals)
-            else:
-                shown = self._draw_counts(shown, counts)
-
-            ret, buffer = cv2.imencode('.jpg', shown)
-            frame_bytes = buffer.tobytes()
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-
-        cap.release()
-
-    def predict_webcam(
-        self,
-        camera_id: int = 0,
-        mode: str = "conveyor",
-        line_y_ratio: float = 0.6,
-        min_label_votes: int = 3,
-    ):
-        """
-        Executa detecção em tempo real via webcam.
-        
-        Args:
-            camera_id: ID da câmera (0, 1, 2...)
-            mode: Modo de operação ('conveyor' para contagem com linha, 'live' para tempo real)
-            line_y_ratio: Posição da linha de contagem no modo conveyor (0.0 no topo, 1.0 embaixo)
-            min_label_votes: Número mínimo de frames para estabilizar a classe detectada
-        
-        Controles:
-            - Pressione 'q' para sair
-        """
+    def predict_webcam(self, camera_id=0, mode="conveyor", line_y_ratio=0.6, min_label_votes=3):
+        # Implementação legada para CLI/Desktop se necessário
         cap = cv2.VideoCapture(camera_id)
-        if not cap.isOpened():
-            raise RuntimeError(f"Nao foi possivel abrir camera {camera_id}")
-
-        # Otimizações de performance
-        cap.set(cv2.CAP_PROP_BUFFERSIZE, DEFAULT_CAMERA_BUFFER_SIZE)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, DEFAULT_CAMERA_WIDTH)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, DEFAULT_CAMERA_HEIGHT)
-
-        totals = Counter()
-        track_labels = defaultdict(lambda: deque(maxlen=10))
-        track_last_y = {}
-        counted_ids = set()
-
         while True:
             ok, frame = cap.read()
-            if not ok:
-                continue
-
-            if mode in ["conveyor", "live"]:
-                result = self.model.track(
-                    source=frame,
-                    conf=self.conf,
-                    persist=True,
-                    verbose=False,
-                    tracker="bytetrack.yaml",
-                )[0]
-            else:
-                result = self.model.predict(source=frame, conf=self.conf, verbose=False)[0]
-
-            counts = self._count(result)
-            shown = result.plot()
-
-            if mode == "conveyor":
-                h = shown.shape[0]
-                line_y = int(h * line_y_ratio)
-
-                if result.boxes is not None and result.boxes.id is not None:
-                    for box, track_id_tensor in zip(result.boxes, result.boxes.id):
-                        track_id = int(track_id_tensor.item())
-                        class_id = int(box.cls[0])
-                        label = self._label(class_id)
-                        x1, y1, x2, y2 = box.xyxy[0].tolist()
-                        cy = int((y1 + y2) / 2)
-
-                        track_labels[track_id].append(label)
-                        stable = self._stable_label(track_labels[track_id], min_label_votes)
-                        prev_y = track_last_y.get(track_id)
-                        track_last_y[track_id] = cy
-
-                        # Conta apenas quando o centro cruza a linha de cima para baixo.
-                        if (
-                            stable is not None
-                            and prev_y is not None
-                            and track_id not in counted_ids
-                            and prev_y < line_y <= cy
-                        ):
-                            totals[stable] += 1
-                            counted_ids.add(track_id)
-                            add_food_item(stable, track_id)
-
-                shown = self._draw_conveyor_overlay(shown, totals, line_y)
-            elif mode == "live":
-                if result.boxes is not None and result.boxes.id is not None:
-                    for box, track_id_tensor in zip(result.boxes, result.boxes.id):
-                        track_id = int(track_id_tensor.item())
-                        class_id = int(box.cls[0])
-                        label = self._label(class_id)
-
-                        track_labels[track_id].append(label)
-                        stable = self._stable_label(track_labels[track_id], min_label_votes)
-
-                        if stable is not None and track_id not in counted_ids:
-                            totals[stable] += 1
-                            counted_ids.add(track_id)
-                            add_food_item(stable, track_id)
-
-                shown = self._draw_counts(shown, totals)
-            else:
-                shown = self._draw_counts(shown, counts)
-
-            cv2.imshow("Detector", shown)
-            if (cv2.waitKey(1) & 0xFF) == ord("q"):
-                break
-
+            if not ok: break
+            cv2.imshow("Detector", frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'): break
         cap.release()
         cv2.destroyAllWindows()
 
-
 if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", required=True)
-    parser.add_argument("--source", default="webcam")
-    parser.add_argument("--camera-id", type=int, default=0)
-    parser.add_argument("--conf", type=float, default=0.7)
-    parser.add_argument("--mode", choices=["conveyor", "live"], default="conveyor")
-    parser.add_argument("--line-y", type=float, default=0.6)
-    parser.add_argument("--min-label-votes", type=int, default=3)
-    args = parser.parse_args()
-    
-    detector = FoodDetector(args.model, args.conf)
-    if args.source.lower() == "webcam":
-        detector.predict_webcam(
-            camera_id=args.camera_id,
-            mode=args.mode,
-            line_y_ratio=args.line_y,
-            min_label_votes=args.min_label_votes,
-        )
-    else:
-        detector.predict_image(args.source)
-
+    pass

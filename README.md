@@ -6,10 +6,7 @@
 <a href= "https://www.fecap.br/"><img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRhZPrRa89Kma0ZZogxm0pi-tCn_TLKeHGVxywp-LXAFGR3B1DPouAJYHgKZGV0XTEf4AE&usqp=CAU" alt="FECAP - Fundação de Comércio Álvares Penteado" border="0"></a>
 </p>
 
-# Aether AI
-
-
-
+# Aether AI - Food Steward 🍎⚖️
 
 ## Integrantes: Bruno Da Silva Ribeiro 24025958, Kauan Rocha Dias 24026492 , Gabriel Henrique Coelho Marussi 24026609, Arthur Rodrigues Ferreira 24026567
 
@@ -17,82 +14,58 @@
 
 ## Descrição
 
+O **Aether AI** é um sistema inteligente de monitoramento e arrecadação de alimentos que utiliza Visão Computacional (YOLOv8) para automatizar o inventário de doações. O sistema é capaz de identificar itens como arroz, feijão, macarrão, óleo e fubá, estimando o peso total com base na área ocupada pelos objetos na imagem.
 
-
-Um aplicativo que utiliza pensamento computacional para realizar a contagem de doações é uma ferramenta desenvolvida para organizar, processar e analisar dados de forma lógica e eficiente. Por meio da decomposição do problema, o sistema divide as doações em categorias (como tipo, quantidade ou peso), permitindo um controle mais claro e estruturado. Além disso, utiliza padrões e algoritmos para automatizar a contagem, reduzindo erros humanos e garantindo maior precisão nas informações
-<br><br>
-Esse tipo de aplicação também pode aplicar abstração ao focar apenas nos dados relevantes para a contagem, ignorando informações desnecessárias, o que otimiza o desempenho. Com isso, torna-se possível gerar relatórios, acompanhar o progresso das doações em tempo real e auxiliar na tomada de decisões, sendo especialmente útil para organizações, campanhas solidárias e projetos sociais que precisam de organização e transparência.
-
-
+### Principais Funcionalidades:
+- **Detecção em Tempo Real**: Identificação automática via webcam.
+- **Estimativa de Peso Inteligente**: Diferencia pacotes de tamanhos variados (ex: Arroz 1kg vs 5kg).
+- **Dashboard de Impacto**: Gráficos e estatísticas de arrecadação em tempo real.
+- **Gestão Fiscal (CRUD)**: Interface completa para edição, exclusão e adição manual de registros.
+- **Sistema de Usuários**: Login seguro e personalização de perfil.
 
 ## 🛠 Estrutura de pastas
 
 -Raiz<br>
 |<br>
 |-->documentos<br>
-  &emsp;|-->antigos<br>
-  &emsp;|Documentação.docx<br>
 |-->executáveis<br>
-  &emsp;|-->windows<br>
-  &emsp;|-->android<br>
-  &emsp;|-->HTML<br>
 |-->imagens<br>
 |-->src<br>
-  &emsp;|-->Backend<br>
-  &emsp;|-->Frontend<br>
-|readme.md<br>
-
-A pasta raiz contem dois arquivos que devem ser alterados:
-
-<b>README.MD</b>: Arquivo que serve como guia e explicação geral sobre seu projeto. O mesmo que você está lendo agora.
-
-Há também 4 pastas que seguem da seguinte forma:
-
-<b>documentos</b>: Toda a documentação estará nesta pasta.
-
-<b>executáveis</b>: Binários e executáveis do projeto devem estar nesta pasta.
-
-<b>imagens</b>: Imagens do sistema
-
-<b>src</b>: Pasta que contém o código fonte.
+  &emsp;|-->Back-end<br>
+  &emsp;|-->Front-end<br>
+|README.md<br>
 
 ## 🛠 Instalação
 
-<b>Android:</b>
+<b>Servidor Web (Python/Flask):</b>
 
-Faça o Download do JOGO.apk no seu celular.
-Execute o APK e siga as instruções de seu telefone.
-
-```sh
-Coloque código do prompt de comnando se for necessário
-```
-
-<b>Windows:</b>
-
-Não há instalação! Apenas executável!
-Encontre o JOGO.exe na pasta executáveis e execute-o como qualquer outro programa.
-
-```sh
-Coloque código do prompt de comnando se for necessário
-```
-
-<b>HTML:</b>
-
-Não há instalação!
-Encontre o index.html na pasta executáveis e execute-o como uma página WEB (através de algum browser).
+1. Certifique-se de ter o Python instalado.
+2. Navegue até a pasta do código fonte:
+   ```bash
+   cd src/Front-end
+   ```
+3. Instale as dependências necessárias:
+   ```bash
+   pip install flask opencv-python ultralytics
+   ```
+4. Inicie o servidor:
+   ```bash
+   python app.py
+   ```
+5. Acesse no navegador: `http://localhost:5000`
 
 ## 💻 Configuração para Desenvolvimento
 
-Descreva como instalar todas as dependências para desenvolvimento e como rodar um test-suite automatizado de algum tipo. Se necessário, faça isso para múltiplas plataformas.
+Para rodar este projeto em ambiente de desenvolvimento, você precisará:
 
-Para abrir este projeto você necessita das seguintes ferramentas:
+1. **Modelo YOLO**: O arquivo `best.pt` deve estar em `src/Front-end/detector/runs/modelo/weights/best.pt`.
+2. **Banco de Dados**: O sistema utiliza SQLite, criado automaticamente na primeira execução em `src/Back-end/food_inventory.db`.
 
--<a href="https://godotengine.org/download">GODOT</a>
-
-```sh
-make install
-npm test
-Coloque código do prompt de comnando se for necessário
+**Bibliotecas principais:**
+```bash
+pip install ultralytics  # IA / YOLO
+pip install flask        # Servidor Web
+pip install opencv-python # Processamento de Imagem
 ```
 
 ## 📋 Licença/License
