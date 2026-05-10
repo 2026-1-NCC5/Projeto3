@@ -9,10 +9,10 @@ def resolve_best_model(custom_path: str | None = None) -> Path:
     
     Args:
         custom_path: Caminho opcional para um modelo específico.
-                    Se None, procura pelo modelo padrão em detector/runs/train/weights/
+                    Se None, procura pelo modelo padrão em detector/runs/modelo/weights/best.pt
     
     Returns:
-        Path: Caminho absoluto para o arquivo .pt do modelo
+        Path: Caminho absoluto para o arquivo best.pt
         
     Raises:
         FileNotFoundError: Se o modelo não for encontrado
@@ -28,17 +28,12 @@ def resolve_best_model(custom_path: str | None = None) -> Path:
             return custom
         raise FileNotFoundError(f"Modelo nao encontrado: {custom}")
 
-    # Procura pelo modelo padrão
-    candidates = [
-        root / "detector" / "runs" / "train" / "weights" / "best.pt",
-        root / "detector" / "runs" / "train" / "weights" / "last.pt",
-    ]
-
-    for path in candidates:
-        if path.exists():
-            return path
-
-    searched = "\n".join(str(p) for p in candidates)
+    # Modelo padrão
+    model_path = root / "detector" / "runs" / "modelo" / "weights" / "best.pt"
+    
+    if model_path.exists():
+        return model_path
+    
     raise FileNotFoundError(
-        f"Modelo treinado nao encontrado. Caminhos verificados:\n{searched}"
+        f"Modelo treinado nao encontrado em: {model_path}"
     )
