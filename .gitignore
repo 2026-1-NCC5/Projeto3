@@ -213,3 +213,9 @@ __marimo__/
 ._*
 .Spotlight-V100
 .Trashes
+
+# Projeto3 — arquivos gerados em runtime
+*.db
+src/Front-end/camera/captures/
+src/Front-end/static/results/
+*.bak

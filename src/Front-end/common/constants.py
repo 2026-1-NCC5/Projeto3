@@ -34,6 +34,12 @@ RICE_WEIGHT_THRESHOLDS = {
     1.0: 0.00, # Caso contrário 1kg
 }
 
+# Peso estimado por item detectado, usado no histórico pendente da câmera.
+ESTIMATED_ITEM_WEIGHT_KG = {
+    "oleo": 1.0,
+    "fuba": 1.0,
+}
+
 # Cores para cada classe (BGR format for OpenCV)
 CLASS_COLORS = {
     "oleo": (0, 191, 255),    # Dourado/Ouro
