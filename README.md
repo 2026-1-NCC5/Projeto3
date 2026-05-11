@@ -6,7 +6,7 @@
 <a href= "https://www.fecap.br/"><img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRhZPrRa89Kma0ZZogxm0pi-tCn_TLKeHGVxywp-LXAFGR3B1DPouAJYHgKZGV0XTEf4AE&usqp=CAU" alt="FECAP - Fundação de Comércio Álvares Penteado" border="0"></a>
 </p>
 
-# Aether AI - Food Steward 🍎⚖️
+# Aether AI 
 
 ## Integrantes: Bruno Da Silva Ribeiro 24025958, Kauan Rocha Dias 24026492 , Gabriel Henrique Coelho Marussi 24026609, Arthur Rodrigues Ferreira 24026567
 
