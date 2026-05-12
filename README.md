@@ -82,7 +82,6 @@ Aqui estão as referências usadas no projeto.
 5. <https://revista.sodebras.com.br/index.php/revista/article/download/76/45>
 6. <https://periodicos.newsciencepubl.com/arace/article/download/1339/1902/5258>
 7. <https://www.fao.org/publications/sofi/2024/>
-8. <https://www.ibge.gov.br/estatisticas/sociais/saude/9127-pesquisa-nacional-por-amostra-de-domicilios.html>
-9. Músicas por: <a href="https://freesound.org/people/DaveJf/sounds/616544/"> DaveJf </a> e <a href="https://freesound.org/people/DRFX/sounds/338986/"> DRFX </a> ambas com Licença CC 0.  
+8. Músicas por: <a href="https://freesound.org/people/DaveJf/sounds/616544/"> DaveJf </a> e <a href="https://freesound.org/people/DRFX/sounds/338986/"> DRFX </a> ambas com Licença CC 0.  
 
 
