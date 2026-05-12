@@ -75,10 +75,14 @@ Utilize o link <https://chooser-beta.creativecommons.org/> para fazer uma licen�
 
 Aqui estão as referências usadas no projeto.
 
-1. <https://github.com/iuricode/readme-template>
-2. <https://github.com/gabrieldejesus/readme-model>
-3. <https://chooser-beta.creativecommons.org/>
-4. <https://freesound.org/>
-5. <https://www.toptal.com/developers/gitignore>
-6. Músicas por: <a href="https://freesound.org/people/DaveJf/sounds/616544/"> DaveJf </a> e <a href="https://freesound.org/people/DRFX/sounds/338986/"> DRFX </a> ambas com Licença CC 0.
+1. <https://liderancasempaticas.com/>
+2. <https://repositorio.ipea.gov.br/items/4b01fa99-33a3-47a3-bbf1-1c6ed01ee22f> 
+3. <https://altabooks.com.br/produto/maos-a-obra-aprendizado-de-maquina-com-scikit-learn-keras-tensorflow/> 
+4. <https://rafaelizbicki.com/ame/>
+5. <https://revista.sodebras.com.br/index.php/revista/article/download/76/45>
+6. <https://periodicos.newsciencepubl.com/arace/article/download/1339/1902/5258>
+7. <https://www.fao.org/publications/sofi/2024/>
+8. <https://www.ibge.gov.br/estatisticas/sociais/saude/9127-pesquisa-nacional-por-amostra-de-domicilios.html>
+9. Músicas por: <a href="https://freesound.org/people/DaveJf/sounds/616544/"> DaveJf </a> e <a href="https://freesound.org/people/DRFX/sounds/338986/"> DRFX </a> ambas com Licença CC 0.  
+
 
