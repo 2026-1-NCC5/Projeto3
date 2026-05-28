@@ -138,7 +138,7 @@ def video_feed():
     
     # 1. Força a parada de qualquer stream anterior para liberar o hardware
     set_camera_stream_active(user_id, False)
-    time.sleep(0.3) # Pequena pausa para o loop anterior detectar a mudança
+    time.sleep(0.5)
     set_camera_stream_active(user_id, True)
     
     session_key = session.get('camera_session_key')

@@ -54,21 +54,42 @@ def is_camera_stream_active(user_id) -> bool:
 
 def try_open_camera(camera_id, retries=5, skip_frames=5):
     cap = None
+    # Força garbage collection para liberar câmeras prévias no macOS
+    import gc
+    gc.collect()
+    time.sleep(0.2)
+    
     for i in range(retries):
         # Tenta AVFoundation no Mac, depois fallback padrão
-        for cid in [camera_id, 0, 1]:
+        for cid in [camera_id]:
             try:
-                cap = cv2.VideoCapture(cid, cv2.CAP_AVFOUNDATION)
-                if not cap.isOpened():
+                # macOS com AVFoundation geralmente é mais estável
+                try:
+                    cap = cv2.VideoCapture(cid, cv2.CAP_AVFOUNDATION)
+                except:
                     cap = cv2.VideoCapture(cid)
+                    
                 if cap.isOpened():
+                    # Libera buffer para evitar frames antigos
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    # Skip inicial de frames para garantir frame fresco
                     for _ in range(skip_frames):
-                        cap.read()
-                    return cap
-                if cap: cap.release()
-            except:
-                if cap: cap.release()
-        time.sleep(0.5)
+                        ret, _ = cap.read()
+                        if not ret:
+                            cap.release()
+                            cap = None
+                            break
+                    if cap:
+                        return cap
+                if cap: 
+                    cap.release()
+                    del cap
+            except Exception as e:
+                if cap: 
+                    cap.release()
+                    del cap
+                print(f"Erro ao abrir câmera {cid}: {e}")
+        time.sleep(0.7)  # Aumentado para dar mais tempo de liberação de hardware
     return None
 
 
